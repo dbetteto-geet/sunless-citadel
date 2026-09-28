@@ -376,7 +376,7 @@ function NPCAnalysisModal({ sessionText, existingNpcs, onClose, onSaved }) {
       if (npc.action === 'update' && npc.existing_id) {
         await supabase.from('npcs').update(payload).eq('id', npc.existing_id)
       } else {
-        await supabase.from('npcs').insert([payload])
+        await supabase.from('npcs').insert([{ ...payload, campaign_id: 'sunless' }])
       }
     }
     setSaving(false)
@@ -483,7 +483,7 @@ function SessionsSection({ isDM }) {
   const [analysisSaved, setAnalysisSaved] = useState(null)
 
   useEffect(() => {
-    supabase.from('sessions').select('*').order('number', { ascending: false }).then(({ data }) => { setSessions(data || []); setLoading(false) })
+    supabase.from('sessions').select('*').eq('campaign_id', 'sunless').order('number', { ascending: false }).then(({ data }) => { setSessions(data || []); setLoading(false) })
     supabase.from('npcs').select('id, name, role, attitude, description').then(({ data }) => setExistingNpcs(data || []))
   }, [])
 
@@ -492,7 +492,7 @@ function SessionsSection({ isDM }) {
   const save = async () => {
     if (!form.title) return
     if (editing) { const { data } = await supabase.from('sessions').update(form).eq('id', editing.id).select(); if (data) setSessions(sessions.map(s => s.id === editing.id ? data[0] : s)) }
-    else { const { data } = await supabase.from('sessions').insert([form]).select(); if (data) setSessions([data[0], ...sessions]) }
+    else { const { data } = await supabase.from('sessions').insert([{ ...form, campaign_id: 'sunless' }]).select(); if (data) setSessions([data[0], ...sessions]) }
     setShowModal(false)
   }
   const remove = async (e, id) => { e.stopPropagation(); await supabase.from('sessions').delete().eq('id', id); setSessions(sessions.filter(s => s.id !== id)) }
@@ -634,14 +634,14 @@ function NPCSection({ isDM }) {
   const [loading, setLoading] = useState(true)
   const [allCharacters, setAllCharacters] = useState([])
 
-  useEffect(() => { supabase.from('npcs').select('*').order('name').then(({ data }) => { setNpcs(data || []); setLoading(false) }) }, [])
+  useEffect(() => { supabase.from('npcs').select('*').eq('campaign_id', 'sunless').order('name').then(({ data }) => { setNpcs(data || []); setLoading(false) }) }, [])
 
   const openAdd = () => { setEditing(null); setForm({ name: '', role: '', attitude: 'Neutrale', description: '', notes_dm: '', image_path: '' }); setShowModal(true) }
   const openEdit = (e, npc) => { e && e.stopPropagation(); setEditing(npc); setForm({ name: npc.name, role: npc.role || '', attitude: npc.attitude, description: npc.description || '', notes_dm: npc.notes_dm || '', image_path: npc.image_path || '', vitality: npc.vitality || 'vivo', first_location: npc.first_location || '', current_location: npc.current_location || '', faction: npc.faction || '' }); setShowModal(true) }
   const save = async () => {
     if (!form.name) return
     if (editing) { const { data } = await supabase.from('npcs').update(form).eq('id', editing.id).select(); if (data) { setNpcs(npcs.map(n => n.id === editing.id ? data[0] : n)); if (selected?.id === editing.id) setSelected(data[0]) } }
-    else { const { data } = await supabase.from('npcs').insert([form]).select(); if (data) setNpcs([...npcs, data[0]].sort((a, b) => a.name.localeCompare(b.name))) }
+    else { const { data } = await supabase.from('npcs').insert([{ ...form, campaign_id: 'sunless' }]).select(); if (data) setNpcs([...npcs, data[0]].sort((a, b) => a.name.localeCompare(b.name))) }
     setShowModal(false)
   }
   const remove = async (id) => { await supabase.from('npcs').delete().eq('id', id); setNpcs(npcs.filter(n => n.id !== id)); setSelected(null) }
@@ -713,8 +713,8 @@ function FactionsSection({ isDM }) {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('factions').select('*').order('order_index'),
-      supabase.from('faction_sections').select('*').order('order_index'),
+      supabase.from('factions').select('*').eq('campaign_id', 'sunless').order('order_index'),
+      supabase.from('faction_sections').select('*').eq('campaign_id', 'sunless').order('order_index'),
     ]).then(([f, s]) => {
       const facs = f.data || []
       setFactions(facs)
@@ -741,7 +741,7 @@ function FactionsSection({ isDM }) {
       const { data } = await supabase.from('factions').update(factionForm).eq('id', editingFaction.id).select()
       if (data) setFactions(factions.map(f => f.id === editingFaction.id ? data[0] : f))
     } else {
-      const { data } = await supabase.from('factions').insert([{ ...factionForm, order_index: factions.length }]).select()
+      const { data } = await supabase.from('factions').insert([{ campaign_id: 'sunless',  ...factionForm, order_index: factions.length }]).select()
       if (data) { setFactions([...factions, data[0]]); setSections(s => ({ ...s, [data[0].id]: [] })) }
     }
     setShowFactionModal(false)
@@ -761,7 +761,7 @@ function FactionsSection({ isDM }) {
       if (data) setSections(s => ({ ...s, [activeFactionId]: s[activeFactionId].map(sec => sec.id === editingSection.id ? data[0] : sec) }))
     } else {
       const order = (sections[activeFactionId] || []).length
-      const { data } = await supabase.from('faction_sections').insert([{ ...sectionForm, faction_id: activeFactionId, order_index: order }]).select()
+      const { data } = await supabase.from('faction_sections').insert([{ campaign_id: 'sunless',  ...sectionForm, faction_id: activeFactionId, order_index: order }]).select()
       if (data) setSections(s => ({ ...s, [activeFactionId]: [...(s[activeFactionId] || []), data[0]] }))
     }
     setShowSectionModal(false)
@@ -855,14 +855,14 @@ function TimelineSection({ isDM }) {
   const [loading, setLoading] = useState(true)
   const [allCharacters, setAllCharacters] = useState([])
 
-  useEffect(() => { supabase.from('timeline_events').select('*').order('created_at').then(({ data }) => { setEvents(data || []); setLoading(false) }) }, [])
+  useEffect(() => { supabase.from('timeline_events').select('*').eq('campaign_id', 'sunless').order('created_at').then(({ data }) => { setEvents(data || []); setLoading(false) }) }, [])
 
   const openAdd = () => { setEditing(null); setForm({ date_ingame: '', title: '', description: '', type: 'altro' }); setShowModal(true) }
   const openEdit = (e, ev) => { e.stopPropagation(); setEditing(ev); setForm({ date_ingame: ev.date_ingame || '', title: ev.title, description: ev.description || '', type: ev.type }); setShowModal(true) }
   const save = async () => {
     if (!form.title) return
     if (editing) { const { data } = await supabase.from('timeline_events').update(form).eq('id', editing.id).select(); if (data) setEvents(events.map(e => e.id === editing.id ? data[0] : e)) }
-    else { const { data } = await supabase.from('timeline_events').insert([form]).select(); if (data) setEvents([...events, data[0]]) }
+    else { const { data } = await supabase.from('timeline_events').insert([{ ...form, campaign_id: 'sunless' }]).select(); if (data) setEvents([...events, data[0]]) }
     setShowModal(false)
   }
   const remove = async (e, id) => { e.stopPropagation(); await supabase.from('timeline_events').delete().eq('id', id); setEvents(events.filter(ev => ev.id !== id)) }
@@ -914,7 +914,7 @@ function MapSection({ isDM }) {
   const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
-    supabase.from('map_pins').select('*').then(({ data }) => { setPins(data || []); setLoading(false) })
+    supabase.from('map_pins').select('*').eq('campaign_id', 'sunless').then(({ data }) => { setPins(data || []); setLoading(false) })
     supabase.storage.from('map-images').list('').then(({ data }) => {
       if (data && data.length > 0) { const f = data.find(f => f.name.startsWith('map.')) || data[data.length - 1]; setMapUrl(getPublicUrl('map-images', f.name) + '?t=' + Date.now()) }
     })
@@ -938,7 +938,7 @@ function MapSection({ isDM }) {
   const savePin = async () => {
     if (!form.name) return
     if (editingPin) { const { data } = await supabase.from('map_pins').update(form).eq('id', editingPin.id).select(); if (data) setPins(pins.map(p => p.id === editingPin.id ? data[0] : p)) }
-    else if (pendingPos) { const { data } = await supabase.from('map_pins').insert([{ ...form, ...pendingPos }]).select(); if (data) setPins([...pins, data[0]]) }
+    else if (pendingPos) { const { data } = await supabase.from('map_pins').insert([{ campaign_id: 'sunless',  ...form, ...pendingPos }]).select(); if (data) setPins([...pins, data[0]]) }
     setShowPinModal(false); setPendingPos(null); setEditingPin(null)
   }
   const removePin = async (id) => { await supabase.from('map_pins').delete().eq('id', id); setPins(pins.filter(p => p.id !== id)); setSelected(null) }
@@ -1035,7 +1035,7 @@ function DMNotesSection() {
   const noteRef = useRef('')
 
   useEffect(() => {
-    supabase.from('dm_notes').select('*').limit(1).maybeSingle().then(({ data }) => {
+    supabase.from('dm_notes').select('*').eq('campaign_id', 'sunless').limit(1).maybeSingle().then(({ data }) => {
       if (data) { setNoteText(data.content || ''); noteRef.current = data.content || ''; setNoteId(data.id) }
       setLoading(false)
     })
@@ -1044,7 +1044,7 @@ function DMNotesSection() {
   const save = async () => {
     const textToSave = noteRef.current
     if (noteId) { await supabase.from('dm_notes').update({ content: textToSave, updated_at: new Date().toISOString() }).eq('id', noteId) }
-    else { const { data } = await supabase.from('dm_notes').insert([{ content: textToSave }]).select(); if (data) setNoteId(data[0].id) }
+    else { const { data } = await supabase.from('dm_notes').insert([{ campaign_id: 'sunless',  content: textToSave }]).select(); if (data) setNoteId(data[0].id) }
     setEditing(false)
   }
 
@@ -1111,7 +1111,7 @@ function SpellbookTab({ playerId, isOwner }) {
   const [expandedSpell, setExpandedSpell] = useState(null)
   const [customForm, setCustomForm] = useState({ spell_name: '', spell_level: 0, school: '', casting_time: '1 azione', is_concentration: false, is_bonus_action: false, is_ritual: false, description: '' })
 
-  useEffect(() => { supabase.from('character_spells').select('*').eq('player_id', playerId).order('spell_level').then(({ data }) => { setSpells(data || []); setLoading(false) }) }, [playerId])
+  useEffect(() => { supabase.from('character_spells').select('*').eq('player_id', playerId).eq('campaign_id', 'sunless').order('spell_level').then(({ data }) => { setSpells(data || []); setLoading(false) }) }, [playerId])
 
   const searchSrd = async (q) => {
     if (!q || q.length < 2) { setSrdSpells([]); return }
@@ -1136,7 +1136,7 @@ function SpellbookTab({ playerId, isOwner }) {
   }
   const addCustom = async () => {
     if (!customForm.spell_name) return
-    const { data } = await supabase.from('character_spells').insert([{ ...customForm, player_id: playerId, is_custom: true }]).select()
+    const { data } = await supabase.from('character_spells').insert([{ campaign_id: 'sunless',  ...customForm, player_id: playerId, is_custom: true }]).select()
     if (data) setSpells([...spells, data[0]])
     setShowCustomModal(false); setCustomForm({ spell_name: '', spell_level: 0, school: '', casting_time: '1 azione', is_concentration: false, is_bonus_action: false, is_ritual: false, description: '' })
   }
@@ -1271,10 +1271,10 @@ function PlayerTab({ player, currentUserId, isDM, viewLegacyId }) {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('characters').select('*').eq('player_id', player.id).order('created_at', { ascending: false }),
-      supabase.from('inventory').select('*').eq('player_id', player.id),
-      supabase.from('companions').select('*').eq('player_id', player.id),
-      supabase.from('player_session_notes').select('*').eq('player_id', player.id).order('created_at', { ascending: false }),
+      supabase.from('characters').select('*').eq('player_id', player.id).eq('campaign_id', 'sunless').order('created_at', { ascending: false }),
+      supabase.from('inventory').select('*').eq('player_id', player.id).eq('campaign_id', 'sunless'),
+      supabase.from('companions').select('*').eq('player_id', player.id).eq('campaign_id', 'sunless'),
+      supabase.from('player_session_notes').select('*').eq('player_id', player.id).eq('campaign_id', 'sunless').order('created_at', { ascending: false }),
     ]).then(([c, inv, comp, n]) => {
       const chars = Array.isArray(c.data) ? c.data : (c.data ? [c.data] : [])
       // If viewing a specific legacy char, show that one
@@ -1292,7 +1292,7 @@ function PlayerTab({ player, currentUserId, isDM, viewLegacyId }) {
       const { data } = await supabase.from('characters').update(charForm).eq('id', character.id).select()
       if (data) { setCharacter(data[0]); setAllCharacters(prev => prev.map(c => c.id === data[0].id ? data[0] : c)) }
     } else {
-      const { data } = await supabase.from('characters').insert([{ ...charForm, player_id: player.id, is_legacy: false }]).select()
+      const { data } = await supabase.from('characters').insert([{ ...charForm, player_id: player.id, is_legacy: false, campaign_id: 'sunless' }]).select()
       if (data) { setCharacter(data[0]); setAllCharacters(prev => [...prev, data[0]]) }
     }
     setEditChar(false)
@@ -1316,7 +1316,7 @@ function PlayerTab({ player, currentUserId, isDM, viewLegacyId }) {
   const saveItem = async () => {
     if (!itemForm.name) return
     if (editingItem) { const { data } = await supabase.from('inventory').update(itemForm).eq('id', editingItem.id).select(); if (data) setInventory(inventory.map(i => i.id === editingItem.id ? data[0] : i)) }
-    else { const { data } = await supabase.from('inventory').insert([{ ...itemForm, player_id: player.id }]).select(); if (data) setInventory([...inventory, data[0]]) }
+    else { const { data } = await supabase.from('inventory').insert([{ ...itemForm, player_id: player.id, campaign_id: 'sunless' }]).select(); if (data) setInventory([...inventory, data[0]]) }
     setShowItemModal(false)
   }
   const removeItem = async (id) => { await supabase.from('inventory').delete().eq('id', id); setInventory(inventory.filter(i => i.id !== id)) }
@@ -1325,7 +1325,7 @@ function PlayerTab({ player, currentUserId, isDM, viewLegacyId }) {
   const saveComp = async () => {
     if (!compForm.name) return
     if (editingComp) { const { data } = await supabase.from('companions').update(compForm).eq('id', editingComp.id).select(); if (data) setCompanions(companions.map(c => c.id === editingComp.id ? data[0] : c)) }
-    else { const { data } = await supabase.from('companions').insert([{ ...compForm, player_id: player.id }]).select(); if (data) setCompanions([...companions, data[0]]) }
+    else { const { data } = await supabase.from('companions').insert([{ campaign_id: 'sunless',  ...compForm, player_id: player.id }]).select(); if (data) setCompanions([...companions, data[0]]) }
     setShowCompModal(false)
   }
   const removeComp = async (id) => { await supabase.from('companions').delete().eq('id', id); setCompanions(companions.filter(c => c.id !== id)) }
@@ -1334,7 +1334,7 @@ function PlayerTab({ player, currentUserId, isDM, viewLegacyId }) {
   const saveNote = async () => {
     if (!noteForm.session_title) return
     if (editingNote) { const { data } = await supabase.from('player_session_notes').update(noteForm).eq('id', editingNote.id).select(); if (data) setSessionNotes(sessionNotes.map(n => n.id === editingNote.id ? data[0] : n)) }
-    else { const { data } = await supabase.from('player_session_notes').insert([{ ...noteForm, player_id: player.id }]).select(); if (data) setSessionNotes([data[0], ...sessionNotes]) }
+    else { const { data } = await supabase.from('player_session_notes').insert([{ campaign_id: 'sunless',  ...noteForm, player_id: player.id }]).select(); if (data) setSessionNotes([data[0], ...sessionNotes]) }
     setShowNoteModal(false)
   }
   const removeNote = async (id) => { await supabase.from('player_session_notes').delete().eq('id', id); setSessionNotes(sessionNotes.filter(n => n.id !== id)) }
@@ -1939,9 +1939,9 @@ function SharedSection({ isDM }) {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('party_loot').select('*').order('created_at'),
-      supabase.from('quests').select('*').order('created_at'),
-      supabase.from('group_notes').select('*').order('created_at', { ascending: false }),
+      supabase.from('party_loot').select('*').eq('campaign_id', 'sunless').order('created_at'),
+      supabase.from('quests').select('*').eq('campaign_id', 'sunless').order('created_at'),
+      supabase.from('group_notes').select('*').eq('campaign_id', 'sunless').order('created_at', { ascending: false }),
     ]).then(([l, q, gn]) => {
       const coins = { gold: 0, silver: 0, copper: 0, platinum: 0 }
       let lootEntry = null
@@ -1959,19 +1959,19 @@ function SharedSection({ isDM }) {
     setPartyCoins(newCoins)
     const existing = await supabase.from('party_loot').select('id').eq('name', '__coins__').maybeSingle()
     if (existing.data) { await supabase.from('party_loot').update({ notes: JSON.stringify(newCoins) }).eq('id', existing.data.id) }
-    else { await supabase.from('party_loot').insert([{ name: '__coins__', quantity: 1, notes: JSON.stringify(newCoins) }]) }
+    else { await supabase.from('party_loot').insert([{ campaign_id: 'sunless',  name: '__coins__', quantity: 1, notes: JSON.stringify(newCoins) }]) }
   }
   const saveLootText = async (text) => {
     setLootText(text)
     if (lootId) { await supabase.from('party_loot').update({ notes: text }).eq('id', lootId) }
-    else { const { data } = await supabase.from('party_loot').insert([{ name: '__loot_text__', quantity: 1, notes: text }]).select(); if (data) setLootId(data[0].id) }
+    else { const { data } = await supabase.from('party_loot').insert([{ campaign_id: 'sunless',  name: '__loot_text__', quantity: 1, notes: text }]).select(); if (data) setLootId(data[0].id) }
   }
   const openAddQuest = () => { setEditingQuest(null); setQuestForm({ title: '', description: '', status: 'attiva', reward: '' }); setShowQuestModal(true) }
   const openEditQuest = (q) => { setEditingQuest(q); setQuestForm({ title: q.title, description: q.description || '', status: q.status, reward: q.reward || '' }); setShowQuestModal(true) }
   const saveQuest = async () => {
     if (!questForm.title) return
     if (editingQuest) { const { data } = await supabase.from('quests').update(questForm).eq('id', editingQuest.id).select(); if (data) setQuests(quests.map(q => q.id === editingQuest.id ? data[0] : q)) }
-    else { const { data } = await supabase.from('quests').insert([questForm]).select(); if (data) setQuests([...quests, data[0]]) }
+    else { const { data } = await supabase.from('quests').insert([{ ...questForm, campaign_id: 'sunless' }]).select(); if (data) setQuests([...quests, data[0]]) }
     setShowQuestModal(false)
   }
   const removeQuest = async (id) => { await supabase.from('quests').delete().eq('id', id); setQuests(quests.filter(q => q.id !== id)) }
@@ -1980,7 +1980,7 @@ function SharedSection({ isDM }) {
   const saveGNote = async () => {
     if (!gnoteForm.session_title) return
     if (editingGNote) { const { data } = await supabase.from('group_notes').update(gnoteForm).eq('id', editingGNote.id).select(); if (data) setGroupNotes(groupNotes.map(n => n.id === editingGNote.id ? data[0] : n)) }
-    else { const { data } = await supabase.from('group_notes').insert([gnoteForm]).select(); if (data) setGroupNotes([data[0], ...groupNotes]) }
+    else { const { data } = await supabase.from('group_notes').insert([{ ...gnoteForm, campaign_id: 'sunless' }]).select(); if (data) setGroupNotes([data[0], ...groupNotes]) }
     setShowNoteModal(false)
   }
   const removeGNote = async (id) => { await supabase.from('group_notes').delete().eq('id', id); setGroupNotes(groupNotes.filter(n => n.id !== id)) }
@@ -2052,8 +2052,8 @@ function LoreSection({ isDM }) {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('lore').select('*').order('order_index'),
-      supabase.from('lore_sections').select('*').order('order_index'),
+      supabase.from('lore').select('*').eq('campaign_id', 'sunless').order('order_index'),
+      supabase.from('lore_sections').select('*').eq('campaign_id', 'sunless').order('order_index'),
     ]).then(([l, s]) => {
       const ls = l.data || []
       setLores(ls)
@@ -2080,7 +2080,7 @@ function LoreSection({ isDM }) {
       const { data } = await supabase.from('lore').update(loreForm).eq('id', editingLore.id).select()
       if (data) setLores(lores.map(l => l.id === editingLore.id ? data[0] : l))
     } else {
-      const { data } = await supabase.from('lore').insert([{ ...loreForm, order_index: lores.length }]).select()
+      const { data } = await supabase.from('lore').insert([{ campaign_id: 'sunless',  ...loreForm, order_index: lores.length }]).select()
       if (data) { setLores([...lores, data[0]]); setSections(s => ({ ...s, [data[0].id]: [] })) }
     }
     setShowLoreModal(false)
@@ -2100,7 +2100,7 @@ function LoreSection({ isDM }) {
       if (data) setSections(s => ({ ...s, [activeLoreId]: s[activeLoreId].map(sec => sec.id === editingSection.id ? data[0] : sec) }))
     } else {
       const order = (sections[activeLoreId] || []).length
-      const { data } = await supabase.from('lore_sections').insert([{ ...sectionForm, lore_id: activeLoreId, order_index: order }]).select()
+      const { data } = await supabase.from('lore_sections').insert([{ campaign_id: 'sunless',  ...sectionForm, lore_id: activeLoreId, order_index: order }]).select()
       if (data) setSections(s => ({ ...s, [activeLoreId]: [...(s[activeLoreId] || []), data[0]] }))
     }
     setShowSectionModal(false)
@@ -2240,7 +2240,7 @@ function InitiativeSection({ isDM, profile, players }) {
   const [hasSubmitted, setHasSubmitted] = useState(false)
 
   const loadEntries = () =>
-    supabase.from('initiative').select('*').order('roll', { ascending: false }).then(({ data }) => {
+    supabase.from('initiative').select('*').eq('campaign_id', 'sunless').order('roll', { ascending: false }).then(({ data }) => {
       const d = data || []
       setEntries(d)
       const mine = d.find(e => e.player_id === profile.id && !e.is_monster)
@@ -2265,7 +2265,7 @@ function InitiativeSection({ isDM, profile, players }) {
     if (existing) {
       await supabase.from('initiative').update({ roll }).eq('id', existing.id)
     } else {
-      await supabase.from('initiative').insert([{
+      await supabase.from('initiative').insert([{ campaign_id: 'sunless', 
         name: playerProfile?.username || 'Giocatore',
         roll, player_id: profile.id, is_monster: false,
         color: playerProfile?.player_color || T.gold,
@@ -2277,7 +2277,7 @@ function InitiativeSection({ isDM, profile, players }) {
 
   const addMonster = async () => {
     if (!monsterForm.name) return
-    await supabase.from('initiative').insert([{
+    await supabase.from('initiative').insert([{ campaign_id: 'sunless', 
       name: monsterForm.name, roll: parseInt(monsterForm.roll) || 0,
       is_monster: true, color: monsterForm.color, position: 0, is_active: false
     }])
@@ -2578,19 +2578,19 @@ export default function Campaign({ profile, onLogout }) {
     setExporting(true)
     try {
       const [sessions, npcs, factions, factionSections, lore, loreSections, timeline, quests, players_data, loot] = await Promise.all([
-        supabase.from('sessions').select('*').order('number'),
-        supabase.from('npcs').select('*').order('name'),
-        supabase.from('factions').select('*').order('order_index'),
-        supabase.from('faction_sections').select('*').order('order_index'),
-        supabase.from('lore').select('*').order('order_index'),
-        supabase.from('lore_sections').select('*').order('order_index'),
-        supabase.from('timeline_events').select('*').order('created_at'),
-        supabase.from('quests').select('*').order('created_at'),
+        supabase.from('sessions').select('*').eq('campaign_id', 'sunless').order('number'),
+        supabase.from('npcs').select('*').eq('campaign_id', 'sunless').order('name'),
+        supabase.from('factions').select('*').eq('campaign_id', 'sunless').order('order_index'),
+        supabase.from('faction_sections').select('*').eq('campaign_id', 'sunless').order('order_index'),
+        supabase.from('lore').select('*').eq('campaign_id', 'sunless').order('order_index'),
+        supabase.from('lore_sections').select('*').eq('campaign_id', 'sunless').order('order_index'),
+        supabase.from('timeline_events').select('*').eq('campaign_id', 'sunless').order('created_at'),
+        supabase.from('quests').select('*').eq('campaign_id', 'sunless').order('created_at'),
         supabase.from('characters').select('*, profiles(username)'),
-        supabase.from('party_loot').select('*'),
+        supabase.from('party_loot').select('*').eq('campaign_id', 'sunless'),
       ])
 
-      let md = `# Knowledge Base — Dungeons & Cinghiali
+      let md = `# Knowledge Base — Sunless Citadel
 
 `
       md += `*Esportato il ${new Date().toLocaleDateString('it-IT')}*
@@ -2794,7 +2794,7 @@ ${lootEntry.notes}
   useEffect(() => {
     const reloadPlayers = () => supabase.from('profiles').select('*').eq('role', 'player').order('username').then(({ data }) => {
       const profs = data || []
-      supabase.from('characters').select('player_id, name, is_legacy').eq('is_legacy', false).then(({ data: chars }) => {
+      supabase.from('characters').select('player_id, name, is_legacy').eq('campaign_id', 'sunless').eq('is_legacy', false).then(({ data: chars }) => {
         const charMap = {}
         ;(chars || []).forEach(c => { charMap[c.player_id] = c.name })
         setPlayers(profs.map(p => ({ ...p, char_name: charMap[p.id] || null })))
@@ -2805,7 +2805,7 @@ ${lootEntry.notes}
       .on('postgres_changes', { event: '*', schema: 'public', table: 'characters' }, () => { reloadPlayers() })
       .subscribe()
     supabase.from('profiles').select('*').order('username').then(({ data }) => setAllContacts(data || []))
-    const reloadLegacy = () => supabase.from('characters').select('*, profiles(username, player_color)').eq('is_legacy', true).then(({ data }) => setLegacyChars(data || []))
+    const reloadLegacy = () => supabase.from('characters').select('*, profiles(username, player_color)').eq('campaign_id', 'sunless').eq('is_legacy', true).then(({ data }) => setLegacyChars(data || []))
     reloadLegacy()
     // Reload when characters change
     const legacyCh = supabase.channel('legacy_chars_watch')

@@ -2492,7 +2492,7 @@ function Sidebar({ profile, players, activeSection, setActiveSection, onLogout, 
       <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: 270, background: `linear-gradient(180deg, #2a1508 0%, #1a0f05 100%)`, borderRight: `2px solid ${T.gold}44`, display: 'flex', flexDirection: 'column', zIndex: 300, transform: isOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s ease', boxShadow: isOpen ? `6px 0 24px rgba(0,0,0,0.5)` : 'none', overflowY: 'auto' }}>
         <div style={{ padding: '1.5rem 1rem 1rem', borderBottom: `1px solid ${T.gold}33`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8, color: T.parchment, fontFamily: "'Cinzel', Georgia, serif", letterSpacing: '0.03em' }}><span style={{ fontSize: 24 }}>🐗</span> D&Cinghiali</div>
+            <div style={{ fontWeight: 700, fontSize: 17, display: 'flex', alignItems: 'center', gap: 8, color: T.parchment, fontFamily: "'Cinzel', Georgia, serif", letterSpacing: '0.03em' }}><span style={{ fontSize: 24 }}>☀️</span> Sunless Citadel</div>
             <div style={{ fontSize: 13, color: T.goldLight, marginTop: 4, fontStyle: 'italic', fontFamily: "'Crimson Text', Georgia, serif" }}>{profile?.username} · {isDM ? 'Dungeon Master' : 'Avventuriero'}</div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: T.goldLight, padding: 4 }}>×</button>
@@ -2858,7 +2858,7 @@ ${lootEntry.notes}
           <span style={{ display: 'block', width: 20, height: 2, background: T.goldLight, borderRadius: 2 }} />
           <span style={{ display: 'block', width: 20, height: 2, background: T.goldLight, borderRadius: 2 }} />
         </button>
-        <span style={{ fontSize: 20 }}>🐗</span>
+        <span style={{ fontSize: 20 }}>☀️</span>
         <span style={{ fontWeight: 600, fontSize: 15, flex: 1, color: T.parchment, fontFamily: "'Cinzel', Georgia, serif", letterSpacing: '0.03em' }}>{currentLabel}</span>
         {exporting && <span style={{ fontSize: 12, color: T.goldLight, fontStyle: 'italic' }}>⏳ Esportazione...</span>}
         <span style={{ fontSize: 13, color: T.goldLight, fontStyle: 'italic' }}>{profile?.username}</span>

@@ -1,3 +1,9 @@
+// =====================================================================
+// SUNLESS CITADEL
+// File: app/campaign.js del repo sunless-citadel (progetto Vercel sunless-citadel)
+// Campagna nel database: campaign_id = 'sunless'
+// Nessuna funzione AI: niente analisi sessioni, scansione schede PG o trascrizione foto
+// =====================================================================
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
@@ -164,6 +170,11 @@ const VITALITY_COLORS = { vivo: '#1a5c2e', morto: '#8b1a1a', sconosciuto: '#8b63
 const SCHOOL_COLORS = { Evocazione: T.red, Illusione: T.purple, Necromanzia: T.inkFaint, Trasformazione: T.green, Divinazione: T.blue, Ammaliamento: '#7a1a4a', Abiurazione: T.gold, Invocazione: '#1a4a3c' }
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 
+function formatBonus(v) {
+  const n = parseInt(v) || 0
+  return n >= 0 ? `+${n}` : `${n}`
+}
+
 function getPublicUrl(bucket, path) {
   if (!path) return null
   return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`
@@ -285,36 +296,6 @@ function ImgUpload({ bucket, folder, currentPath, onUploaded, label }) {
     </div>
   )
 }
-function NotePhotoScanner({ onTranscribed }) {
-  const [scanning, setScanning] = useState(false)
-  const [error, setError] = useState('')
-  const ref = useRef()
-  const handle = async (e) => {
-    const file = e.target.files[0]; if (!file) return
-    setScanning(true); setError('')
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
-      try {
-        const res = await fetch('/api/transcribe-note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: ev.target.result.split(',')[1], mediaType: file.type }) })
-        const data = await res.json()
-        if (data.success) { onTranscribed(data.text) } else { setError('Trascrizione fallita.') }
-      } catch { setError('Errore di connessione.') }
-      setScanning(false)
-    }
-    reader.readAsDataURL(file)
-  }
-  return (
-    <div style={{ background: `linear-gradient(135deg, #e8f0e8, #d8e8d8)`, border: `1.5px solid ${T.green}44`, borderRadius: 6, padding: '1rem', marginBottom: '1rem' }}>
-      <p style={{ fontSize: 14, fontWeight: 600, color: T.green, margin: '0 0 6px', ...headerFont }}>📜 Trascrivi appunti con AI</p>
-      <p style={{ fontSize: 14, color: T.inkLight, margin: '0 0 10px' }}>Fotografa i tuoi appunti — Claude li trascriverà automaticamente.</p>
-      <button type="button" onClick={() => ref.current.click()} disabled={scanning} style={{ background: T.green, color: '#f8edd8', border: 'none', borderRadius: 4, padding: '9px 16px', fontSize: 14, fontWeight: 600, cursor: scanning ? 'not-allowed' : 'pointer', minHeight: 44, opacity: scanning ? 0.7 : 1, ...headerFont }}>
-        {scanning ? '⏳ Trascrizione...' : '📷 Fotografa appunti'}
-      </button>
-      <input ref={ref} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handle} />
-      {error && <p style={{ color: T.red, fontSize: 13, marginTop: 8, marginBottom: 0 }}>{error}</p>}
-    </div>
-  )
-}
 function CoinsPanel({ values, onChange, editable }) {
   const COINS = [{ key: 'gold', label: 'MO', color: T.gold, icon: '🪙' }, { key: 'silver', label: 'MA', color: T.inkFaint, icon: '🥈' }, { key: 'copper', label: 'MR', color: '#7a4a2e', icon: '🟫' }, { key: 'platinum', label: 'MP', color: T.blue, icon: '💎' }]
   return (
@@ -336,140 +317,6 @@ function CoinsPanel({ values, onChange, editable }) {
   )
 }
 
-// ─── Analisi NPC da sessione ──────────────────────────────────────────────────
-function NPCAnalysisModal({ sessionText, existingNpcs, onClose, onSaved }) {
-  const [analyzing, setAnalyzing] = useState(false)
-  const [suggestions, setSuggestions] = useState(null)
-  const [error, setError] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const analyze = async () => {
-    setAnalyzing(true); setError(''); setSuggestions(null)
-    try {
-      const res = await fetch('/api/analyze-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionText, existingNpcs })
-      })
-      const data = await res.json()
-      if (data.success) {
-        // Filtra gli skip e aggiunge stato di approvazione
-        const filtered = data.npcs
-          .filter(n => n.action !== 'skip')
-          .map(n => ({ ...n, approved: true, editing: false }))
-        setSuggestions(filtered)
-      } else { setError('Analisi fallita. Riprova.') }
-    } catch { setError('Errore di connessione.') }
-    setAnalyzing(false)
-  }
-
-  const toggle = (i, field, val) => {
-    setSuggestions(s => s.map((n, idx) => idx === i ? { ...n, [field]: val ?? !n[field] } : n))
-  }
-
-  const saveAll = async () => {
-    if (!suggestions) return
-    setSaving(true)
-    const approved = suggestions.filter(n => n.approved)
-    for (const npc of approved) {
-      const payload = { name: npc.name, role: npc.role, attitude: npc.attitude, description: npc.description, notes_dm: npc.notes_dm || '' }
-      if (npc.action === 'update' && npc.existing_id) {
-        await supabase.from('npcs').update(payload).eq('id', npc.existing_id)
-      } else {
-        await supabase.from('npcs').insert([{ ...payload, campaign_id: 'sunless' }])
-      }
-    }
-    setSaving(false)
-    onSaved(approved.length)
-    onClose()
-  }
-
-  const approvedCount = suggestions ? suggestions.filter(n => n.approved).length : 0
-
-  return (
-    <Modal title="🔮 Analisi NPC della Sessione" onClose={onClose} wide>
-      {!suggestions && !analyzing && (
-        <div>
-          <p style={{ fontSize: 15, color: T.inkLight, lineHeight: 1.7 }}>
-            Claude leggerà il riassunto di questa sessione ed estrarrà automaticamente tutti i personaggi non giocanti menzionati, confrontandoli con gli NPC già presenti nel database.
-          </p>
-          <p style={{ fontSize: 14, color: T.inkFaint, fontStyle: 'italic', marginBottom: 20 }}>
-            Potrai approvare, modificare o scartare ogni suggerimento prima del salvataggio.
-          </p>
-          <BtnGold onClick={analyze}>🔮 Avvia Analisi</BtnGold>
-        </div>
-      )}
-
-      {analyzing && (
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>⏳</div>
-          <p style={{ color: T.inkLight, fontStyle: 'italic', fontSize: 16 }}>Claude sta leggendo la sessione e identificando i personaggi...</p>
-        </div>
-      )}
-
-      {error && <p style={{ color: T.red, fontSize: 15 }}>{error} <button onClick={analyze} style={{ background: 'none', border: 'none', color: T.gold, cursor: 'pointer', textDecoration: 'underline', fontSize: 14 }}>Riprova</button></p>}
-
-      {suggestions && (
-        <div>
-          <p style={{ fontSize: 14, color: T.inkFaint, marginBottom: 16, fontStyle: 'italic' }}>
-            Trovati {suggestions.length} personaggi. Approva, modifica o deseleziona prima di salvare.
-          </p>
-
-          {suggestions.length === 0 && <p style={{ color: T.inkFaint, fontStyle: 'italic' }}>Nessun NPC nuovo rilevato in questa sessione.</p>}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-            {suggestions.map((npc, i) => (
-              <div key={i} style={{ ...cardStyle, opacity: npc.approved ? 1 : 0.5, border: npc.approved ? `1.5px solid ${npc.action === 'update' ? T.gold : T.green}` : `1.5px solid ${T.parchmentDarker}` }}>
-                {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 700, fontSize: 16, color: T.ink, ...headerFont }}>{npc.name}</span>
-                    <Badge color={npc.action === 'update' ? T.gold : T.green}>{npc.action === 'update' ? '↻ Aggiornamento' : '✦ Nuovo'}</Badge>
-                    <Badge color={ATTITUDE_COLORS[npc.attitude] || T.inkFaint}>{npc.attitude}</Badge>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-                    <button onClick={() => toggle(i, 'editing')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 4, color: T.inkFaint }}>✏️</button>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={npc.approved} onChange={() => toggle(i, 'approved')} style={{ width: 18, height: 18, accentColor: T.green }} />
-                      <span style={{ fontSize: 13, color: npc.approved ? T.green : T.inkFaint, fontWeight: 600 }}>{npc.approved ? 'Approva' : 'Scarta'}</span>
-                    </label>
-                  </div>
-                </div>
-
-                {!npc.editing ? (
-                  <div>
-                    <div style={{ fontSize: 13, color: T.inkFaint, fontStyle: 'italic', marginBottom: 4 }}>{npc.role}</div>
-                    <p style={{ fontSize: 14, color: T.inkLight, margin: '0 0 6px', lineHeight: 1.5 }}>{npc.description}</p>
-                    {npc.notes_dm && <div style={{ background: '#fff8e8', border: `1px solid ${T.goldLight}`, borderRadius: 4, padding: '6px 10px', fontSize: 13, color: T.inkLight, fontStyle: 'italic' }}><span style={{ fontWeight: 600, color: T.gold }}>DM: </span>{npc.notes_dm}</div>}
-                  </div>
-                ) : (
-                  <div>
-                    <FF label="Nome"><Input value={npc.name} onChange={e => toggle(i, 'name', e.target.value)} /></FF>
-                    <FF label="Ruolo"><Input value={npc.role} onChange={e => toggle(i, 'role', e.target.value)} /></FF>
-                    <FF label="Attitudine"><Sel value={npc.attitude} onChange={e => toggle(i, 'attitude', e.target.value)}>{Object.keys(ATTITUDE_COLORS).map(a => <option key={a}>{a}</option>)}</Sel></FF>
-                    <FF label="Descrizione"><Textarea value={npc.description} onChange={e => toggle(i, 'description', e.target.value)} /></FF>
-                    <FF label="Note DM (segrete)"><Textarea value={npc.notes_dm || ''} onChange={e => toggle(i, 'notes_dm', e.target.value)} /></FF>
-                    <BtnS onClick={() => toggle(i, 'editing')} style={{ marginTop: 4 }}>✓ Chiudi</BtnS>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <Divider />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <span style={{ fontSize: 14, color: T.inkFaint, fontStyle: 'italic' }}>{approvedCount} personaggi verranno salvati.</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <BtnS onClick={onClose}>Annulla</BtnS>
-              <BtnGold onClick={saveAll} disabled={saving || approvedCount === 0}>{saving ? 'Salvataggio...' : `✦ Salva ${approvedCount} NPC`}</BtnGold>
-            </div>
-          </div>
-        </div>
-      )}
-    </Modal>
-  )
-}
-
 // ─── Sessioni ─────────────────────────────────────────────────────────────────
 function SessionsSection({ isDM }) {
   const [sessions, setSessions] = useState([])
@@ -478,13 +325,9 @@ function SessionsSection({ isDM }) {
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState({ number: '', title: '', date: '', summary: '' })
   const [loading, setLoading] = useState(true)
-  const [existingNpcs, setExistingNpcs] = useState([])
-  const [analyzingSession, setAnalyzingSession] = useState(null)
-  const [analysisSaved, setAnalysisSaved] = useState(null)
 
   useEffect(() => {
     supabase.from('sessions').select('*').eq('campaign_id', 'sunless').order('number', { ascending: false }).then(({ data }) => { setSessions(data || []); setLoading(false) })
-    supabase.from('npcs').select('id, name, role, attitude, description').then(({ data }) => setExistingNpcs(data || []))
   }, [])
 
   const openAdd = () => { setEditing(null); setForm({ number: '', title: '', date: '', summary: '' }); setShowModal(true) }
@@ -497,22 +340,10 @@ function SessionsSection({ isDM }) {
   }
   const remove = async (e, id) => { e.stopPropagation(); await supabase.from('sessions').delete().eq('id', id); setSessions(sessions.filter(s => s.id !== id)) }
 
-  const handleAnalysisSaved = (count) => {
-    setAnalysisSaved(count)
-    setTimeout(() => setAnalysisSaved(null), 4000)
-    // Ricarica NPC
-    supabase.from('npcs').select('id, name, role, attitude, description').then(({ data }) => setExistingNpcs(data || []))
-  }
-
   if (loading) return <p style={{ color: T.inkFaint }}>Caricamento...</p>
   return (
     <div>
       <SH title="📜 Riassunti Sessioni" action={isDM && <BtnP onClick={openAdd}>+ Nuova</BtnP>} />
-      {analysisSaved !== null && (
-        <div style={{ background: `linear-gradient(135deg, #e8f0e8, #d8e8d8)`, border: `1.5px solid ${T.green}`, borderRadius: 6, padding: '0.75rem 1rem', marginBottom: 16, fontSize: 15, color: T.green, fontWeight: 600 }}>
-          ✦ {analysisSaved} NPC salvati con successo!
-        </div>
-      )}
       {sessions.length === 0 && <p style={{ color: T.inkFaint, fontStyle: 'italic' }}>Nessuna sessione ancora scritta nei libri...</p>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {sessions.map(s => (
@@ -525,7 +356,6 @@ function SessionsSection({ isDM }) {
               <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
                 {isDM && (
                   <>
-                    <button onClick={e => { e.stopPropagation(); setAnalyzingSession(s) }} title="Analizza NPC con AI" style={{ background: T.gold + '22', border: `1px solid ${T.gold}44`, borderRadius: 4, cursor: 'pointer', fontSize: 14, padding: '4px 8px', color: T.gold, fontWeight: 600 }}>🔮</button>
                     <button onClick={e => openEdit(e, s)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 4, color: T.inkFaint }}>✏️</button>
                     <button onClick={e => remove(e, s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: 4, color: T.inkFaint }}>🗑️</button>
                   </>
@@ -537,13 +367,6 @@ function SessionsSection({ isDM }) {
               <>
                 <Divider />
                 <RichText value={s.summary} />
-                {isDM && s.summary && (
-                  <div style={{ marginTop: 12 }}>
-                    <button onClick={e => { e.stopPropagation(); setAnalyzingSession(s) }} style={{ background: T.gold + '22', border: `1px solid ${T.gold}`, borderRadius: 4, cursor: 'pointer', fontSize: 14, padding: '8px 14px', color: T.gold, fontWeight: 600, ...headerFont }}>
-                      🔮 Analizza NPC con AI
-                    </button>
-                  </div>
-                )}
               </>
             )}
           </Card>
@@ -562,14 +385,6 @@ function SessionsSection({ isDM }) {
         </Modal>
       )}
 
-      {analyzingSession && (
-        <NPCAnalysisModal
-          sessionText={analyzingSession.summary}
-          existingNpcs={existingNpcs}
-          onClose={() => setAnalyzingSession(null)}
-          onSaved={handleAnalysisSaved}
-        />
-      )}
     </div>
   )
 }
@@ -915,8 +730,10 @@ function MapSection({ isDM }) {
 
   useEffect(() => {
     supabase.from('map_pins').select('*').eq('campaign_id', 'sunless').then(({ data }) => { setPins(data || []); setLoading(false) })
-    supabase.storage.from('map-images').list('').then(({ data }) => {
-      if (data && data.length > 0) { const f = data.find(f => f.name.startsWith('map.')) || data[data.length - 1]; setMapUrl(getPublicUrl('map-images', f.name) + '?t=' + Date.now()) }
+    // Mappa di Sunless nella cartella sunless/ del bucket, separata da quella dei Cinghiali
+    supabase.storage.from('map-images').list('sunless').then(({ data }) => {
+      const f = (data || []).find(f => f.name.startsWith('map.'))
+      if (f) setMapUrl(getPublicUrl('map-images', `sunless/${f.name}`) + '?t=' + Date.now())
     })
   }, [])
 
@@ -924,8 +741,8 @@ function MapSection({ isDM }) {
     const file = e.target.files[0]; if (!file) return
     setUploading(true)
     const ext = file.name.split('.').pop()
-    await supabase.storage.from('map-images').upload(`map.${ext}`, file, { upsert: true })
-    setMapUrl(getPublicUrl('map-images', `map.${ext}`) + '?t=' + Date.now())
+    await supabase.storage.from('map-images').upload(`sunless/map.${ext}`, file, { upsert: true })
+    setMapUrl(getPublicUrl('map-images', `sunless/map.${ext}`) + '?t=' + Date.now())
     setUploading(false); setShowUploadModal(false)
   }
   const handleClick = (e) => {
@@ -1056,7 +873,7 @@ function DMNotesSection() {
       <SH title="🔒 Pergamene Segrete del DM" action={editing ? <BtnP onClick={save}>Sigilla</BtnP> : <BtnS onClick={() => setEditing(true)}>Scrivi</BtnS>} />
       <Card style={{ background: `linear-gradient(135deg, #fff8e8, #f8edd8)`, border: `1.5px solid ${T.goldLight}` }}>
         {editing
-          ? <div><NotePhotoScanner onTranscribed={text => { const v = noteRef.current + (noteRef.current ? '\n\n' : '') + text; setNoteText(v); noteRef.current = v }} /><textarea value={noteText} onChange={e => handleChange(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', minHeight: 200, background: 'transparent', border: 'none', outline: 'none', fontSize: 16, lineHeight: 1.8, resize: 'vertical', color: T.ink, fontFamily: "'Crimson Text', Georgia, serif" }} /></div>
+          ? <div><textarea value={noteText} onChange={e => handleChange(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', minHeight: 200, background: 'transparent', border: 'none', outline: 'none', fontSize: 16, lineHeight: 1.8, resize: 'vertical', color: T.ink, fontFamily: "'Crimson Text', Georgia, serif" }} /></div>
           : <pre style={{ margin: 0, fontFamily: "'Crimson Text', Georgia, serif", fontSize: 16, lineHeight: 1.8, whiteSpace: 'pre-wrap', color: T.inkLight, fontStyle: 'italic' }}>{noteText || 'Nessuna pergamena segreta...'}</pre>}
       </Card>
     </div>
@@ -1064,38 +881,6 @@ function DMNotesSection() {
 }
 
 
-
-// ─── SheetScanner ─────────────────────────────────────────────────────────────
-function SheetScanner({ onParsed }) {
-  const [scanning, setScanning] = useState(false)
-  const [error, setError] = useState('')
-  const ref = useRef()
-  const handle = async (e) => {
-    const file = e.target.files[0]; if (!file) return
-    setScanning(true); setError('')
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
-      try {
-        const res = await fetch('/api/parse-sheet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageBase64: ev.target.result.split(',')[1], mediaType: file.type }) })
-        const data = await res.json()
-        if (data.success) { onParsed(data.data) } else { setError('Trascrizione fallita.') }
-      } catch { setError('Errore di connessione.') }
-      setScanning(false)
-    }
-    reader.readAsDataURL(file)
-  }
-  return (
-    <div style={{ background: `linear-gradient(135deg, #e8f0e8, #d8e8d8)`, border: `1.5px solid ${T.green}44`, borderRadius: 6, padding: '1rem', marginBottom: '1rem' }}>
-      <p style={{ fontSize: 14, fontWeight: 600, color: T.green, margin: '0 0 6px', ...headerFont }}>📜 Scansiona Scheda con AI</p>
-      <p style={{ fontSize: 14, color: T.inkLight, margin: '0 0 10px' }}>Fotografa la tua scheda — Claude la legge e compila i campi.</p>
-      <button type="button" onClick={() => ref.current.click()} disabled={scanning} style={{ background: T.green, color: '#f8edd8', border: 'none', borderRadius: 4, padding: '9px 16px', fontSize: 14, fontWeight: 600, cursor: scanning ? 'not-allowed' : 'pointer', minHeight: 44, opacity: scanning ? 0.7 : 1, ...headerFont }}>
-        {scanning ? '⏳ Analisi...' : '📷 Fotografa scheda'}
-      </button>
-      <input ref={ref} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handle} />
-      {error && <p style={{ color: T.red, fontSize: 13, marginTop: 8, marginBottom: 0 }}>{error}</p>}
-    </div>
-  )
-}
 
 // ─── Libro incantesimi PG ─────────────────────────────────────────────────────
 function SpellbookTab({ playerId, isOwner }) {
@@ -1258,7 +1043,7 @@ function PlayerTab({ player, currentUserId, isDM, viewLegacyId }) {
   const [showNoteModal, setShowNoteModal] = useState(false)
   const [editingNote, setEditingNote] = useState(null)
   const [expandedNote, setExpandedNote] = useState(null)
-  const EC = { name: '', class: '', race: '', level: 1, hp: 10, max_hp: 10, ac: 10, background: '', image_path: '', str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, attacks: '', spell_slots_total: '', spell_slots_used: '', gold: 0, silver: 0, copper: 0, platinum: 0 }
+  const EC = { name: '', class: '', race: '', level: 1, hp: 10, max_hp: 10, ac: 10, initiative_bonus: 0, background: '', image_path: '', str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, attacks: '', spell_slots_total: '', spell_slots_used: '', gold: 0, silver: 0, copper: 0, platinum: 0 }
   const [charForm, setCharForm] = useState(EC)
   const EI = { name: '', type: 'Vari', description: '', quantity: 1 }
   const [itemForm, setItemForm] = useState(EI)
@@ -1288,11 +1073,12 @@ function PlayerTab({ player, currentUserId, isDM, viewLegacyId }) {
   }, [player.id, viewLegacyId])
 
   const saveChar = async () => {
+    const payload = { ...charForm, initiative_bonus: parseInt(charForm.initiative_bonus) || 0 }
     if (character) {
-      const { data } = await supabase.from('characters').update(charForm).eq('id', character.id).select()
+      const { data } = await supabase.from('characters').update(payload).eq('id', character.id).select()
       if (data) { setCharacter(data[0]); setAllCharacters(prev => prev.map(c => c.id === data[0].id ? data[0] : c)) }
     } else {
-      const { data } = await supabase.from('characters').insert([{ ...charForm, player_id: player.id, is_legacy: false, campaign_id: 'sunless' }]).select()
+      const { data } = await supabase.from('characters').insert([{ ...payload, player_id: player.id, is_legacy: false, campaign_id: 'sunless' }]).select()
       if (data) { setCharacter(data[0]); setAllCharacters(prev => [...prev, data[0]]) }
     }
     setEditChar(false)
@@ -1382,7 +1168,6 @@ function PlayerTab({ player, currentUserId, isDM, viewLegacyId }) {
           </div>
           {editChar ? (
             <Card>
-              {isOwner && <SheetScanner onParsed={p => setCharForm(f => ({ ...f, ...p }))} />}
               <ImgUpload bucket="character-images" folder="characters" currentPath={charForm.image_path} onUploaded={p => setCharForm({ ...charForm, image_path: p })} label="Ritratto" />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%,200px),1fr))', gap: '0 12px' }}>
                 <FF label="Nome"><Input value={charForm.name} onChange={e => setCharForm({ ...charForm, name: e.target.value })} /></FF>
@@ -1406,6 +1191,7 @@ function PlayerTab({ player, currentUserId, isDM, viewLegacyId }) {
                 <FF label="Background"><Input value={charForm.background} onChange={e => setCharForm({ ...charForm, background: e.target.value })} /></FF>
                 <FF label={charForm.multiclass ? "Livello (classe principale)" : "Livello"}><Input type="number" value={charForm.level} onChange={e => setCharForm({ ...charForm, level: e.target.value })} /></FF>
                 <FF label="CA"><Input type="number" value={charForm.ac} onChange={e => setCharForm({ ...charForm, ac: e.target.value })} /></FF>
+                <FF label="Bonus iniziativa"><Input type="number" value={charForm.initiative_bonus ?? 0} onChange={e => setCharForm({ ...charForm, initiative_bonus: e.target.value })} placeholder="es. 2 o -1" /></FF>
                 <FF label="PF attuali"><Input type="number" value={charForm.hp} onChange={e => setCharForm({ ...charForm, hp: e.target.value })} /></FF>
                 <FF label="PF massimi"><Input type="number" value={charForm.max_hp} onChange={e => setCharForm({ ...charForm, max_hp: e.target.value })} /></FF>
               </div>
@@ -1420,7 +1206,7 @@ function PlayerTab({ player, currentUserId, isDM, viewLegacyId }) {
           ) : character ? (
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 120px), 1fr))', gap: 10, marginBottom: 12 }}>
-                {[['Classe Armatura', character.ac], ['Livello', character.level], ['Background', character.background]].map(([k, v]) => <div key={k} style={{ ...cardStyle, textAlign: 'center' }}><div style={{ fontSize: 11, color: T.gold, marginBottom: 4, ...headerFont, letterSpacing: '0.05em' }}>{k.toUpperCase()}</div><div style={{ fontSize: 18, fontWeight: 700, color: T.ink, ...headerFont }}>{v}</div></div>)}
+                {[['Classe Armatura', character.ac], ['Iniziativa', formatBonus(character.initiative_bonus)], ['Livello', character.level], ['Background', character.background]].map(([k, v]) => <div key={k} style={{ ...cardStyle, textAlign: 'center' }}><div style={{ fontSize: 11, color: T.gold, marginBottom: 4, ...headerFont, letterSpacing: '0.05em' }}>{k.toUpperCase()}</div><div style={{ fontSize: 18, fontWeight: 700, color: T.ink, ...headerFont }}>{v}</div></div>)}
               </div>
               <Card style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -1675,7 +1461,6 @@ function PlayerTab({ player, currentUserId, isDM, viewLegacyId }) {
           ))}
           {showNoteModal && (
             <Modal title={editingNote ? 'Modifica Nota' : 'Nuova Nota di Sessione'} onClose={() => setShowNoteModal(false)}>
-              <NotePhotoScanner onTranscribed={text => setNoteForm(f => ({ ...f, content: f.content ? f.content + '\n\n' + text : text }))} />
               <FF label="Titolo / Sessione"><Input value={noteForm.session_title} onChange={e => setNoteForm({ ...noteForm, session_title: e.target.value })} placeholder="es. Sessione 3 — La cripta" /></FF>
               <FF label="Data"><Input type="date" value={noteForm.date} onChange={e => setNoteForm({ ...noteForm, date: e.target.value })} /></FF>
               <FF label="Note"><Textarea value={noteForm.content} onChange={e => setNoteForm({ ...noteForm, content: e.target.value })} style={{ minHeight: 160 }} /></FF>
@@ -2028,7 +1813,7 @@ function SharedSection({ isDM }) {
               {expandedNote === n.id && <><Divider /><pre style={{ margin: 0, fontFamily: "'Crimson Text', Georgia, serif", fontSize: 15, lineHeight: 1.8, color: T.inkLight, whiteSpace: 'pre-wrap', fontStyle: 'italic' }}>{n.content}</pre></>}
             </Card>
           ))}
-          {showNoteModal && <Modal title={editingGNote ? 'Modifica Cronaca' : 'Nuova Cronaca di Gruppo'} onClose={() => setShowNoteModal(false)}><NotePhotoScanner onTranscribed={text => setGnoteForm(f => ({ ...f, content: f.content ? f.content + '\n\n' + text : text }))} /><FF label="Titolo / Sessione"><Input value={gnoteForm.session_title} onChange={e => setGnoteForm({ ...gnoteForm, session_title: e.target.value })} placeholder="es. Sessione 3 — La cripta" /></FF><FF label="Data"><Input type="date" value={gnoteForm.date} onChange={e => setGnoteForm({ ...gnoteForm, date: e.target.value })} /></FF><FF label="Cronaca"><Textarea value={gnoteForm.content} onChange={e => setGnoteForm({ ...gnoteForm, content: e.target.value })} style={{ minHeight: 160 }} /></FF><div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}><BtnS onClick={() => setShowNoteModal(false)}>Annulla</BtnS><BtnP onClick={saveGNote}>Trascrivi</BtnP></div></Modal>}
+          {showNoteModal && <Modal title={editingGNote ? 'Modifica Cronaca' : 'Nuova Cronaca di Gruppo'} onClose={() => setShowNoteModal(false)}><FF label="Titolo / Sessione"><Input value={gnoteForm.session_title} onChange={e => setGnoteForm({ ...gnoteForm, session_title: e.target.value })} placeholder="es. Sessione 3 — La cripta" /></FF><FF label="Data"><Input type="date" value={gnoteForm.date} onChange={e => setGnoteForm({ ...gnoteForm, date: e.target.value })} /></FF><FF label="Cronaca"><Textarea value={gnoteForm.content} onChange={e => setGnoteForm({ ...gnoteForm, content: e.target.value })} style={{ minHeight: 160 }} /></FF><div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}><BtnS onClick={() => setShowNoteModal(false)}>Annulla</BtnS><BtnP onClick={saveGNote}>Trascrivi</BtnP></div></Modal>}
         </div>
       )}
     </div>
@@ -2779,7 +2564,7 @@ ${lootEntry.notes}
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `dnd-cinghiali-knowledge-base-${new Date().toISOString().split('T')[0]}.md`
+      a.download = `sunless-citadel-knowledge-base-${new Date().toISOString().split('T')[0]}.md`
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
